@@ -130,6 +130,80 @@
   .ref-body mark { background: #fff3bf; border-radius: 3px; padding: 0 1px; }
   .ref-modal .tip { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
 
+  /* 请求权基础图谱面板 */
+  .claims-panel {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 94;
+    background: var(--bg); overflow-y: auto;
+  }
+  .claims-head {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--primary); color: #fff; padding: 14px 16px;
+  }
+  .claims-head b { font-size: 15px; }
+  .claims-head button {
+    background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 9px;
+    padding: 5px 12px; font-size: 14px; cursor: pointer;
+  }
+  .claims-inner { max-width: 760px; margin: 0 auto; padding: 14px 14px 40px; }
+  .claims-intro {
+    font-size: 12.5px; color: var(--muted); background: #eef4fb; border: 1px solid #d8e4f2;
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; line-height: 1.7;
+  }
+  .claim-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px; margin-bottom: 14px;
+  }
+  .claim-card h3 {
+    margin: 0 0 2px; font-size: 16px; color: var(--primary);
+  }
+  .claim-card h3 .de { font-weight: 400; font-size: 12px; color: var(--muted); }
+  .claim-type {
+    display: inline-block; font-size: 11px; color: var(--primary);
+    background: #eef1f5; border-radius: 20px; padding: 2px 10px; margin: 6px 0 10px;
+  }
+  .claim-goal {
+    font-size: 13.5px; color: var(--text); background: #fbf8ee;
+    border-left: 3px solid var(--accent); padding: 8px 10px; border-radius: 0 8px 8px 0;
+    margin-bottom: 10px;
+  }
+  .claim-sec { margin: 10px 0; font-size: 13.5px; line-height: 1.75; }
+  .claim-sec .sec-tag {
+    display: inline-block; font-size: 11.5px; font-weight: 700; color: #fff;
+    border-radius: 6px; padding: 2px 8px; margin-bottom: 6px;
+  }
+  .claim-sec.elements .sec-tag { background: var(--primary); }
+  .claim-sec.defenses .sec-tag { background: #b3261e; }
+  .claim-sec.effect .sec-tag { background: #2e7d32; }
+  .claim-sec.related .sec-tag { background: #6b7280; }
+  .claim-sec.competition .sec-tag { background: #8e5a1f; }
+  .claim-sec ol { margin: 0; padding-left: 20px; }
+  .claim-sec li { margin-bottom: 4px; }
+  .claim-sec p { margin: 0; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 12px; color: var(--primary); background: #eef1f5;
+    border-radius: 20px; padding: 3px 10px; cursor: pointer;
+  }
+  .chip:hover { background: #dde6f0; }
+  .comp-item {
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; margin-bottom: 6px;
+    font-size: 12.5px; line-height: 1.6; background: #fbfcfe;
+  }
+  .comp-item .comp-num {
+    color: var(--primary); font-weight: 700; cursor: pointer;
+    text-decoration: underline dotted;
+  }
+  .comp-item .comp-kind {
+    font-size: 10.5px; color: #fff; background: #8e5a1f; border-radius: 4px;
+    padding: 1px 6px; margin-left: 6px;
+  }
+  .comp-item .comp-jump {
+    font-size: 11.5px; color: var(--accent); cursor: pointer; margin-left: 6px;
+    text-decoration: none; border-bottom: 1px dashed var(--accent);
+  }
+  .claim-source { font-size: 11px; color: var(--muted); margin-top: 8px; }
+
   footer {
     text-align: center; font-size: 11px; color: var(--muted); margin-top: 18px; line-height: 1.7;
   }
@@ -188,6 +262,7 @@
       <div class="sub">德国民法典条文查询 · 目录 · AI 联想</div>
     </div>
     <div style="display:flex;gap:8px">
+      <button id="btnClaims">⚖ 请求权</button>
       <button id="btnToc">📖 目录</button>
       <button id="btnSettings">⚙ 设置</button>
     </div>
@@ -229,6 +304,12 @@
   <input id="tocSearch" type="search" placeholder="过滤：条文号或标题关键词" autocomplete="off">
   <div class="toc-body" id="tocBody"></div>
 </aside>
+
+<!-- 请求权基础图谱面板 -->
+<div class="claims-panel" id="claimsPanel" style="display:none">
+  <div class="claims-head"><b>⚖ 请求权基础规范图谱（阶段一样板）</b><button id="btnCloseClaims">✕</button></div>
+  <div class="claims-inner" id="claimsBody"></div>
+</div>
 
 <div class="mask" id="mask">
   <div class="modal">
@@ -26671,6 +26752,95 @@ const BGB_ZH = {
 
 </script>
 <script>
+// BGB 请求权基础规范图谱（阶段一：核心样板）
+// 结构：goal 请求目标 → elements 构成要件 → defenses 抗辩 → effect 法律效果
+// → related 关联规范 → competition 竞合关系（type: 竞合/择一/并存）
+// 要件与抗辩中的条文号可点击弹窗；竞合项可跳转对应请求权卡片
+// 参考：Medicus/Petersen, Bürgerliches Recht; Brox/Walker, Allgemeiner Teil des BGB
+const BGB_CLAIMS = [
+  {
+    id: "985",
+    type: "物权请求权",
+    name: "所有权返还请求权",
+    de: "Herausgabeanspruch des Eigentümers (Vindikation)",
+    goal: "请求占有人返还原物",
+    elements: [
+      { text: "请求权人须为所有权人", refs: ["903"] },
+      { text: "被请求人为该物的占有人（直接占有或间接占有，第868条）", refs: ["854", "868"] },
+      { text: "占有人无占有的权利，即对请求权人不享有占有权源", refs: ["986"] },
+      { text: "占有仍存续（物未灭失，占有未丧失）", refs: ["856"] }
+    ],
+    defenses: [
+      { text: "占有人对所有人享有占有的权利（占有权源抗辩）", refs: ["986"] },
+      { text: "所有权已因善意取得而消灭（第932条至第935条）", refs: ["932", "933", "934", "935"] },
+      { text: "消灭时效抗辩：第197条第1款第1项（30年）", refs: ["197"] },
+      { text: "占有人依第1000条享有费用偿还请求权，可依第273条主张留置抗辩", refs: ["1000", "273"] }
+    ],
+    effect: "占有人应返还该物。物的使用、孳息返还与费用偿还另依第987条至第1003条处理",
+    related: ["986", "987", "988", "989", "990", "991", "992", "993", "994", "995", "996", "997", "998", "999", "1000", "1001", "1007"],
+    competition: [
+      { num: "812", kind: "竞合", note: "占有人将物转让给第三人并获利的，所有人可转而主张给付型不当得利（让与所得，第816条第1款）" },
+      { num: "823", kind: "竞合", note: "占有期间物被毁损、灭失的，所有人另可主张侵权损害赔偿（所有权侵害）" }
+    ],
+    source: "Vgl. Medicus/Petersen, Bürgerliches Recht, Rn. 109 ff."
+  },
+  {
+    id: "812",
+    type: "不当得利请求权",
+    name: "不当得利返还请求权",
+    de: "Bereicherungsanspruch (Leistungs- und Eingriffskondiktion)",
+    goal: "请求返还无法律上原因所受的利益",
+    elements: [
+      { text: "一方获得利益（财产增加或费用节省）", refs: ["812"] },
+      { text: "给付型：因给付而取得（给付目的欠缺）；非给付型：因其他方式而取得（侵害他人权益）", refs: ["812"] },
+      { text: "无法律上原因（给付目的自始不能实现、嗣后消灭或结果不生）", refs: ["812"] }
+    ],
+    defenses: [
+      { text: "给付人明知无给付义务而给付（第814条）", refs: ["814"] },
+      { text: "不法原因给付：给付目的违反法律禁止或善良风俗，得利人免于返还（第817条第2句）", refs: ["817"] },
+      { text: "得利丧失抗辩：得利人善意且利益已不存在，免于返还（第818条第3款）", refs: ["818"] },
+      { text: "消灭时效抗辩（第195条，3年；自请求权成立且债权人知道时起算，第199条）", refs: ["195", "199"] }
+    ],
+    effect: "返还所受利益及其孳息（第818条第1款）；不能返还原物的，偿还价额（第818条第2款）；恶意得利人依第819条负加重责任",
+    related: ["813", "814", "815", "816", "817", "818", "819", "820", "821", "822"],
+    competition: [
+      { num: "985", kind: "择一", note: "物仍由占有人持有时，所有人可选择物权返还请求权（第985条）或不当得利请求权；物已转让的，依第816条第1款主张让与所得" },
+      { num: "823", kind: "竞合", note: "给付本身构成侵权的（如胁迫、欺诈），受损人可同时主张侵权损害赔偿，且不受得利丧失抗辩限制" }
+    ],
+    source: "Vgl. Medicus/Petersen, Bürgerliches Recht, Rn. 661 ff."
+  },
+  {
+    id: "823",
+    type: "侵权请求权",
+    name: "侵权损害赔偿请求权（一般侵权）",
+    de: "Deliktische Schadensersatzansprüche (§ 823 I)",
+    goal: "请求赔偿因侵害绝对权/法益所受的损害",
+    elements: [
+      { text: "侵害法益：生命、身体、健康、自由、所有权或其他权利", refs: ["823"] },
+      { text: "加害行为（作为或不作为）", refs: ["823"] },
+      { text: "因果关系（责任成立因果关系）", refs: ["823"] },
+      { text: "违法性（无法定阻却事由，如第227条至第229条正当防卫、紧急避险）", refs: ["227", "228", "229"] },
+      { text: "过错：故意或过失（第276条第2款过失定义）", refs: ["276"] },
+      { text: "损害发生及责任范围因果关系", refs: ["249"] }
+    ],
+    defenses: [
+      { text: "与有过失：损害发生时被害人也有过错的，赔偿义务与赔偿范围依情事而定（第254条）", refs: ["254"] },
+      { text: "违法阻却事由：正当防卫（第227条）、紧急避险（第228条）、自助行为（第229条）", refs: ["227", "228", "229"] },
+      { text: "消灭时效抗辩：第195条（3年）+ 第199条起算规则（最长30年/10年除斥期间）", refs: ["195", "199"] }
+    ],
+    effect: "损害赔偿（第249条恢复原状优先，不能恢复原状或逾限未为者以金钱赔偿，第250条、第251条）；非财产损害仅限法定情形（第253条，含第253条第2款疼痛抚慰金）",
+    related: ["249", "250", "251", "253", "254", "276", "830", "831", "832", "833", "836", "839", "840", "842", "847"],
+    competition: [
+      { num: "280", kind: "并存", note: "损害发生于合同履行关系中的，请求权竞合，债权人可择一主张；契约路径受归责于债务人的限制（第280条第1款后半句推定）" },
+      { num: "812", kind: "竞合", note: "侵害他人权益并获利的，受损人可同时主张获利返还（不当得利）与损害赔偿（侵权），数额以损害为限（禁止双重填补）" },
+      { num: "985", kind: "竞合", note: "对所有权人而言，返还请求权（第985条）与侵权赔偿请求权可并存：先返还，损害（如使用利益、毁损）另赔" }
+    ],
+    source: "Vgl. Medicus/Petersen, Bürgerliches Recht, Rn. 775 ff."
+  }
+];
+
+</script>
+<script>
 /* BGB Helper 网页版 - 核心逻辑 */
 "use strict";
 
@@ -27341,6 +27511,87 @@ function tocNodeText(node) {
     openRefModal(nums, a.dataset.subs || "");
   });
 
+  // ---------- 请求权基础图谱 ----------
+  const claimsPanel = $("claimsPanel"), claimsBody = $("claimsBody");
+
+  function claimCardHtml(c) {
+    const sec = (cls, tag, inner) =>
+      '<div class="claim-sec ' + cls + '"><span class="sec-tag">' + tag + '</span>' + inner + "</div>";
+
+    let html = "";
+    html += '<div class="claim-card" id="claim-' + c.id + '">';
+    html += "<h3>§" + c.id + " " + c.name + ' <span class="de">' + c.de + "</span></h3>";
+    html += '<span class="claim-type">' + c.type + "</span>";
+    html += '<div class="claim-goal">🎯 <b>请求目标：</b>' + c.goal + "</div>";
+
+    // 构成要件
+    let ol = "<ol>";
+    c.elements.forEach((el) => {
+      ol += "<li>" + el.text + (el.refs && el.refs.length
+        ? "（" + el.refs.map((r) => '<a class="xref" data-nums="' + r + '" data-subs="">第' + r + "条</a>").join("、") + "）" : "") + "</li>";
+    });
+    ol += "</ol>";
+    html += sec("elements", "构成要件", ol);
+
+    // 抗辩
+    let dl = "<ul style='margin:0;padding-left:18px;list-style:disc'>";
+    c.defenses.forEach((d) => {
+      dl += "<li>" + d.text + (d.refs && d.refs.length
+        ? "（" + d.refs.map((r) => '<a class="xref" data-nums="' + r + '" data-subs="">第' + r + "条</a>").join("、") + "）" : "") + "</li>";
+    });
+    dl += "</ul>";
+    html += sec("defenses", "抗辩", dl);
+
+    // 法律效果
+    html += sec("effect", "法律效果", "<p>" + c.effect + "</p>");
+
+    // 关联规范
+    if (c.related && c.related.length) {
+      const chips = c.related.map((r) => '<span class="chip" data-nums="' + r + '">§' + r + "</span>").join("");
+      html += sec("related", "关联规范", '<div class="chip-row">' + chips + "</div>");
+    }
+
+    // 竞合关系
+    if (c.competition && c.competition.length) {
+      const items = c.competition.map((cp) => {
+        const target = BGB_CLAIMS.some((x) => x.id === cp.num) ? '<span class="comp-jump" data-claim="' + cp.num + '">查看请求权卡片</span>' : "";
+        return '<div class="comp-item">与 <span class="comp-num" data-nums="' + cp.num + '">第' + cp.num + '条</span>'
+          + '<span class="comp-kind">' + cp.kind + "</span>：" + cp.note + " " + target + "</div>";
+      }).join("");
+      html += sec("competition", "竞合关系", items);
+    }
+
+    html += '<div class="claim-source">📚 体系参照：' + c.source + "</div>";
+    html += "</div>";
+    return html;
+  }
+
+  function renderClaims() {
+    const intro =
+      '<div class="claims-intro">⚖ <b>请求权基础（Anspruchsgrundlagen）图谱</b>：以"请求目标 → 构成要件 → 抗辩 → 法律效果"为骨架组织核心请求权规范。'
+      + "黄色高亮的条文号可点击查看中英全文；竞合条目可跳转对应请求权卡片。当前为阶段一样板（3 条），后续按契约 / 类契约 / 物权 / 侵权 / 不当得利分类扩展。</div>";
+    claimsBody.innerHTML = intro + BGB_CLAIMS.map(claimCardHtml).join("");
+  }
+
+  function openClaims() { renderClaims(); claimsPanel.style.display = "block"; document.body.style.overflow = "hidden"; }
+  function closeClaims() { claimsPanel.style.display = "none"; document.body.style.overflow = ""; }
+  $("btnClaims").addEventListener("click", openClaims);
+  $("btnCloseClaims").addEventListener("click", closeClaims);
+  claimsPanel.addEventListener("click", (e) => {
+    // 竞合跳转到另一张请求权卡片
+    const j = e.target && e.target.closest ? e.target.closest(".comp-jump") : null;
+    if (j) {
+      const card = document.getElementById("claim-" + j.dataset.claim);
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    // 关联规范 chips / 竞合条文号 → 引致条款弹窗
+    const chip = e.target && e.target.closest ? e.target.closest(".chip") : null;
+    if (chip) { openRefModal([chip.dataset.nums]); return; }
+    const num = e.target && e.target.closest ? e.target.closest(".comp-num") : null;
+    if (num) { openRefModal([num.dataset.nums]); return; }
+  });
+
   // ---------- AI 联想 ----------
   function renderAi(hits, sourceLabel) {
     const box = $("aiList");
@@ -27521,6 +27772,11 @@ function tocNodeText(node) {
         lines.push("985:" + (r.text ? "ok" : "fail"));
         lines.push("xrefEn:" + (linkifyRefs("under section 275 (1) to (3)").indexOf('data-nums="275"') >= 0 && linkifyRefs("under section 275 (1) to (3)").indexOf('data-subs="1-3"') >= 0 ? "ok" : "fail"));
         lines.push("xrefZh:" + (linkifyZhRefs("第275条第(1)至(3)款规定的").indexOf('data-subs="1-3"') >= 0 ? "ok" : "fail"));
+        try {
+          renderClaims();
+          const cb = $("claimsBody");
+          lines.push("claims:" + (cb.innerHTML.indexOf("claim-985") >= 0 && cb.innerHTML.indexOf("claim-812") >= 0 && cb.innerHTML.indexOf("claim-823") >= 0 ? "ok" : "fail"));
+        } catch (e) { lines.push("claims:ERR"); }
         try {
           const hits = await associate("表见代理", loadCfg());
           lines.push("associate:" + hits.length);
