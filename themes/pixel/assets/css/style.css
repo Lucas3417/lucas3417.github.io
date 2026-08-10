@@ -273,7 +273,9 @@ html[data-theme="light"] .theme-btn .moon { display: none; }
 .post-content h2 { font-size: 22px; }
 .post-content h3 { font-size: 19px; }
 .post-content h4 { font-size: 17px; }
-.post-content p { margin-bottom: 16px; }
+.post-content p { margin-bottom: 0; text-indent: 2em; }
+.post-content li p, .post-content blockquote p, .post-content .footnotes p, .footnotes p { text-indent: 0; }
+.post-content p:has(> img) { text-indent: 0; }
 .post-content img { max-width: 100%; height: auto; border: 2px solid var(--border-dark); margin: 8px 0; }
 .post-content blockquote {
   border-left: 4px solid var(--accent);
