@@ -1,0 +1,40 @@
+baseURL: 'https://lucas3417.github.io/'
+title: 'LUCAS 的冒险日志'
+theme: pixel
+locale: zh-cn
+hasCJKLanguage: true
+paginate: 10
+enableRobotsTXT: true
+enableEmoji: true
+enableGitInfo: false
+buildDrafts: false
+buildFuture: false
+buildExpired: false
+minify:
+  disableXML: true
+  minifyOutput: true
+params:
+  description: '记录民法研究、判例分析与实务笔记'
+  author: 'Lucas'
+menu:
+  main:
+    - identifier: posts
+      name: 全部博文
+      url: /posts/
+      weight: 1
+    - identifier: archives
+      name: 归档
+      url: /archives/
+      weight: 2
+    - identifier: categories
+      name: 分类
+      url: /categories/
+      weight: 3
+    - identifier: tags
+      name: 标签
+      url: /tags/
+      weight: 4
+    - identifier: about
+      name: 关于
+      url: /about/
+      weight: 5

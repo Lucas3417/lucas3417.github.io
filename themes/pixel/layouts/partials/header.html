@@ -1,0 +1,19 @@
+<div class="titlebar">
+  <span class="site"><a href="{{ .Site.BaseURL }}" style="color:inherit;text-decoration:none">{{ .Site.Title }}</a></span>
+  <div class="titlebar-right">
+    <nav class="topnav">
+      {{ range .Site.Menus.main }}
+      <a href="{{ .URL }}">{{ .Name }}</a>
+      {{ end }}
+    </nav>
+    <button class="theme-btn" id="themeBtn" title="切换白天/深夜模式">
+      <span class="moon">☾ 深夜</span><span class="sun">☀ 白天</span>
+    </button>
+  </div>
+</div>
+<div class="statusbar">
+  <span class="stat">博文 <b>{{ len (where .Site.RegularPages "Section" "posts") }}</b></span>
+  <span class="stat">分类 <b>{{ len .Site.Taxonomies.categories }}</b></span>
+  <span class="stat">标签 <b>{{ len .Site.Taxonomies.tags }}</b></span>
+  <span class="stat">最近更新 <b>{{ with (index (where .Site.RegularPages "Section" "posts").ByDate.Reverse 0) }}{{ .Date.Format "2006-01-02" }}{{ end }}</b></span>
+</div>

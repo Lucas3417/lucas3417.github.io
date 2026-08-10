@@ -1,0 +1,10 @@
+<div class="side">
+  <div class="avatar"><img src="{{ "images/avatar.png" | relURL }}" alt="avatar"></div>
+  <div class="name">Lucas</div>
+  <div class="role">君子终日乾乾，夕惕若厉，无咎</div>
+  <div class="menu">
+    {{ range .Site.Menus.main }}
+    <a class="menu-item" href="{{ .URL }}"><span class="ic">▸</span> {{ .Name }}</a>
+    {{ end }}
+  </div>
+</div>

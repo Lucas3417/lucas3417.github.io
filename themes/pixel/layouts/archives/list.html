@@ -1,0 +1,17 @@
+{{ define "main" }}
+<div class="section-title">归档</div>
+<div class="section-sub">按年份归档 · 共 {{ len .Site.RegularPages }} 篇</div>
+{{ range (where .Site.RegularPages "Section" "posts").GroupByDate "2006" }}
+<div class="archive-year">
+  <div class="archive-year-title">{{ .Key }}</div>
+  <ul class="post-list">
+    {{ range .Pages }}
+    <li>
+      <a class="p-title" href="{{ .Permalink }}">{{ .Title }}</a>
+      <div class="p-meta">{{ .Date.Format "2006-01-02" }}</div>
+    </li>
+    {{ end }}
+  </ul>
+</div>
+{{ end }}
+{{ end }}

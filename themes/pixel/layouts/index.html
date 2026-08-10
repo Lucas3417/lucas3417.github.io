@@ -1,0 +1,17 @@
+{{ define "main" }}
+<div class="section-title">最新博文</div>
+{{ $posts := where .Site.RegularPages "Section" "posts" }}
+<div class="section-sub">共 {{ len $posts }} 篇 · 按发布时间排序</div>
+<ul class="post-list">
+  {{ range $posts }}
+  <li>
+    <a class="p-title" href="{{ .Permalink }}">{{ .Title }}</a>
+    <div class="p-meta">
+      {{ range .Params.tags }}<span class="p-tag">{{ . }}</span>{{ end }}
+      {{ .Date.Format "2006-01-02" }}
+    </div>
+    {{ if .Summary }}<div class="p-excerpt">{{ .Summary }}</div>{{ end }}
+  </li>
+  {{ end }}
+</ul>
+{{ end }}

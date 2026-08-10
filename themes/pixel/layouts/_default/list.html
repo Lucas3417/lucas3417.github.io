@@ -1,0 +1,12 @@
+{{ define "main" }}
+<div class="section-title">{{ .Title }}</div>
+<div class="section-sub">共 {{ len .Pages }} 篇</div>
+<ul class="post-list">
+  {{ range .Pages }}
+  <li>
+    <a class="p-title" href="{{ .Permalink }}">{{ .Title }}</a>
+    <div class="p-meta">{{ .Date.Format "2006-01-02" }}</div>
+  </li>
+  {{ end }}
+</ul>
+{{ end }}

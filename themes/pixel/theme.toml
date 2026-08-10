@@ -1,0 +1,4 @@
+name = "pixel"
+license = "MIT"
+min_version = "0.100.0"
+description = "Pixel window style theme for Lucas blog"
