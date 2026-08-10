@@ -31,6 +31,11 @@ textarea#bodyText{min-height:46vh;font-family:ui-monospace,"Cascadia Mono",Conso
 .tabs{display:flex;gap:6px;margin:10px 0}
 .tabs button{flex:1;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:14px}
 .tabs button.on{background:var(--green);color:#fff;border-color:var(--green)}
+.mdbar{display:flex;gap:6px;margin:0 0 8px;overflow-x:auto;padding:4px 0;-webkit-overflow-scrolling:touch}
+.mdbar button{flex:0 0 auto;min-width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:16px;color:var(--ink);display:flex;align-items:center;justify-content:center}
+.mdbar button:active{background:var(--green);color:#fff}
+.mdbar button.aibtn{background:#f7ecd7;color:var(--amber);border-color:#ecd9a8}
+.mdbar button.aibtn:active{background:var(--amber);color:#fff}
 #preview{background:var(--card);border-radius:12px;padding:16px;margin-bottom:10px;display:none}
 #preview h1{font-size:20px;margin:10px 0}#preview h2{font-size:18px;margin:10px 0 4px;border-left:3px solid var(--green);padding-left:8px}
 #preview h3{font-size:16px;margin:8px 0}#preview p{margin:6px 0}#preview ul{padding-left:20px}
@@ -46,6 +51,10 @@ textarea#bodyText{min-height:46vh;font-family:ui-monospace,"Cascadia Mono",Conso
 #viewLogin input{text-align:center;letter-spacing:2px}
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:50;align-items:center;justify-content:center;padding:20px}
 #overlay.show{display:flex}
+#aiOverlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:60;align-items:center;justify-content:center;padding:16px}
+#aiOverlay.show{display:flex}
+#aiOverlay .dialog{max-width:520px;max-height:88vh;display:flex;flex-direction:column}
+#aiOverlay .dialog textarea{flex:0 0 auto}
 .dialog{background:var(--card);border-radius:14px;padding:18px;width:100%;max-width:420px;max-height:80vh;overflow:auto}
 .empty{text-align:center;color:var(--sub);padding:40px 0}
 footer{text-align:center;color:var(--sub);font-size:12px;padding:16px}
@@ -101,6 +110,17 @@ footer{text-align:center;color:var(--sub);font-size:12px;padding:16px}
       <button id="tabEdit" class="on">编辑</button>
       <button id="tabPrev">预览</button>
     </div>
+    <div class="mdbar">
+      <button data-act="b" title="加粗"><b>B</b></button>
+      <button data-act="i" title="斜体"><i>I</i></button>
+      <button data-act="h" title="标题">H</button>
+      <button data-act="q" title="引用">❝</button>
+      <button data-act="ul" title="列表">•</button>
+      <button data-act="link" title="链接">🔗</button>
+      <button data-act="fn" title="脚注">脚注</button>
+      <button data-act="code" title="代码">`</button>
+      <button data-act="ai" title="AI 整理" class="aibtn">🤖</button>
+    </div>
     <textarea id="bodyText" placeholder="# 标题&#10;&#10;正文 Markdown…"></textarea>
     <div id="preview"></div>
     <div class="row">
@@ -120,6 +140,24 @@ footer{text-align:center;color:var(--sub);font-size:12px;padding:16px}
     <div class="row">
       <button class="primary" id="btnSaveSettings">保存</button>
       <button class="ghost" id="btnCloseSettings">取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="aiOverlay">
+  <div class="dialog">
+    <h3 style="margin-bottom:8px">🤖 AI 文字整理</h3>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:8px">粘贴普通文字（口语也行），AI 会整理成规范 Markdown。</p>
+    <textarea id="aiInput" placeholder="在这里粘贴你的普通文字…" style="min-height:140px"></textarea>
+    <div class="row">
+      <button class="primary" id="aiGo">转换</button>
+      <button class="ghost" id="aiClose">关闭</button>
+    </div>
+    <label>结果（可手动修改）</label>
+    <textarea id="aiResult" style="min-height:180px;font-family:ui-monospace,Consolas,monospace;font-size:14px"></textarea>
+    <div class="row">
+      <button class="primary" id="aiInsert">⬇️ 插入正文末尾</button>
+      <button class="ghost" id="aiCopy">复制</button>
     </div>
   </div>
 </div>
@@ -422,6 +460,103 @@ $("btnDelete").onclick = () => { deletePost().catch((e) => toast("❌ " + e.mess
 $("tabEdit").onclick = () => switchTab("edit");
 $("tabPrev").onclick = () => switchTab("prev");
 $("fDraft").onchange = () => {};
+
+/* ---------- 格式按钮（选中文字 → 转 md 语法） ---------- */
+function selRange() {
+  const t = $("bodyText");
+  return { t, s: t.selectionStart, e: t.selectionEnd };
+}
+function applyWrap(pre, post, placeholder) {
+  const { t, s, e } = selRange();
+  const sel = t.value.slice(s, e);
+  if (sel) {
+    t.value = t.value.slice(0, s) + pre + sel + post + t.value.slice(e);
+    t.focus();
+    t.selectionStart = s + pre.length;
+    t.selectionEnd = s + pre.length + sel.length;
+  } else {
+    const ph = placeholder || pre + post;
+    t.value = t.value.slice(0, s) + ph + t.value.slice(e);
+    t.focus();
+    const ps = s + pre.length;
+    t.selectionStart = ps;
+    t.selectionEnd = ps + Math.max(0, ph.length - pre.length - post.length);
+  }
+}
+function applyLinePrefix(prefix) {
+  const { t, s } = selRange();
+  const ls = t.value.lastIndexOf("\n", s - 1) + 1;
+  t.value = t.value.slice(0, ls) + prefix + t.value.slice(ls);
+  t.focus();
+  t.selectionStart = t.selectionEnd = ls + prefix.length;
+}
+function applyLink() {
+  const { t, s, e } = selRange();
+  const sel = t.value.slice(s, e) || "链接文字";
+  t.value = t.value.slice(0, s) + "[" + sel + "](https://)" + t.value.slice(e);
+  t.focus();
+  t.selectionStart = s + 1 + sel.length + 3;
+  t.selectionEnd = t.selectionStart + 8;
+}
+function applyFootnote() {
+  const { t, s } = selRange();
+  const nums = [...t.value.matchAll(/\[\^(\d+)\]/g)].map((m) => parseInt(m[1]));
+  const n = nums.length ? Math.max(...nums) + 1 : 1;
+  t.value = t.value.slice(0, s) + "[^" + n + "]" + t.value.slice(s);
+  t.value = t.value.replace(/\s+$/, "") + "\n\n[^" + n + "]: ";
+  t.focus();
+  t.selectionStart = t.selectionEnd = t.value.length;
+}
+document.querySelectorAll(".mdbar button").forEach((b) => {
+  ["touchstart", "mousedown"].forEach((ev) => b.addEventListener(ev, (e) => e.preventDefault()));
+  b.addEventListener("click", () => {
+    const act = b.dataset.act;
+    if (act === "b") applyWrap("**", "**");
+    else if (act === "i") applyWrap("*", "*");
+    else if (act === "code") applyWrap("`", "`");
+    else if (act === "h") applyLinePrefix("## ");
+    else if (act === "q") applyLinePrefix("> ");
+    else if (act === "ul") applyLinePrefix("- ");
+    else if (act === "link") applyLink();
+    else if (act === "fn") applyFootnote();
+    else if (act === "ai") { $("aiOverlay").classList.add("show"); $("aiInput").focus(); }
+  });
+});
+
+/* ---------- AI 整理（可选项） ---------- */
+let aiBusy = false;
+$("aiClose").onclick = () => $("aiOverlay").classList.remove("show");
+$("aiOverlay").onclick = (e) => { if (e.target === $("aiOverlay")) $("aiOverlay").classList.remove("show"); };
+$("aiGo").onclick = async () => {
+  const text = $("aiInput").value.trim();
+  if (!text) { toast("请先粘贴文字"); return; }
+  if (aiBusy) return;
+  aiBusy = true;
+  $("aiGo").textContent = "转换中…";
+  try {
+    const d = await api("/api/ai/format", { method: "POST", body: JSON.stringify({ text }) });
+    $("aiResult").value = d.markdown || "";
+    toast("✅ 转换完成");
+  } catch (e) {
+    toast("❌ " + e.message);
+  } finally {
+    aiBusy = false;
+    $("aiGo").textContent = "转换";
+  }
+};
+$("aiInsert").onclick = () => {
+  const md = $("aiResult").value.trim();
+  if (!md) return;
+  const t = $("bodyText");
+  t.value = (t.value.replace(/\s+$/, "") ? t.value.replace(/\s+$/, "") + "\n\n" : "") + md + "\n";
+  $("aiOverlay").classList.remove("show");
+  toast("已插入正文末尾");
+};
+$("aiCopy").onclick = () => {
+  const md = $("aiResult").value;
+  if (navigator.clipboard) navigator.clipboard.writeText(md).then(() => toast("已复制"));
+  else { $("aiResult").select(); document.execCommand("copy"); toast("已复制"); }
+};
 
 /* 启动 */
 boot();
