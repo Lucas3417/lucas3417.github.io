@@ -130,7 +130,7 @@ html[data-theme="light"] .theme-btn .moon { display: none; }
 /* ===== 主体 ===== */
 .main {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 @media (max-width: 720px) {
   .main { grid-template-columns: 1fr; }
@@ -265,7 +265,7 @@ html[data-theme="light"] .theme-btn .moon { display: none; }
 /* ===== 文章正文 ===== */
 .post-title { font-size: 26px; color: var(--text); margin-bottom: 12px; line-height: 1.5; }
 .post-meta { color: var(--dim); font-size: 14px; margin-bottom: 24px; }
-.post-content { font-size: 17px; color: var(--text); line-height: 2; }
+.post-content { font-size: 17px; color: var(--text); line-height: 2; overflow-wrap: break-word; word-break: break-word; }
 .post-content h1, .post-content h2, .post-content h3, .post-content h4 {
   color: var(--text); margin: 28px 0 14px; line-height: 1.5;
 }
