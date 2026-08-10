@@ -103,6 +103,33 @@
   .btn-cancel { background: #eef1f5; color: var(--text); }
   .modal .tip { font-size: 11.5px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
 
+  /* 引致条款链接 */
+  .xref {
+    color: var(--primary); text-decoration: underline dotted; cursor: pointer;
+    border-bottom: 1px dashed var(--accent); padding: 0 1px;
+  }
+  .xref:hover { background: #eef1f5; }
+
+  /* 引致条款弹窗 */
+  .ref-modal { max-width: 680px; max-height: 82vh; display: flex; flex-direction: column; }
+  .ref-modal h3 {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 0 0 10px; font-size: 15px; color: var(--primary);
+  }
+  .ref-modal h3 .close {
+    background: #eef1f5; color: var(--text); border: none; border-radius: 8px;
+    padding: 4px 12px; font-size: 13px; cursor: pointer;
+  }
+  .ref-body { overflow-y: auto; }
+  .ref-body .ref-label { font-size: 12.5px; font-weight: 600; color: var(--primary); margin: 12px 0 4px; }
+  .ref-body pre {
+    margin: 0; max-height: none; white-space: pre-wrap; word-break: break-word;
+    font-family: "Consolas", "Menlo", monospace; font-size: 13px; line-height: 1.65;
+  }
+  .ref-body .cn pre, .ref-body pre.cn { font-family: inherit; font-size: 14.5px; line-height: 1.8; }
+  .ref-body mark { background: #fff3bf; border-radius: 3px; padding: 0 1px; }
+  .ref-modal .tip { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+
   footer {
     text-align: center; font-size: 11px; color: var(--muted); margin-top: 18px; line-height: 1.7;
   }
@@ -218,6 +245,20 @@
       <button class="btn-cancel" id="btnCancel">取消</button>
       <button class="btn-ok" id="btnSave">保存</button>
     </div>
+  </div>
+</div>
+
+<!-- 引致条款弹窗 -->
+<div class="mask" id="maskRef">
+  <div class="modal ref-modal">
+    <h3 id="refTitle">被引致条款 <button class="close" id="btnCloseRef">✕</button></h3>
+    <div class="ref-body">
+      <div class="ref-label">英文原文（官方译本）</div>
+      <pre id="refEn"></pre>
+      <div class="ref-label">中文译文（本地内置）</div>
+      <pre id="refCn" class="cn"></pre>
+    </div>
+    <p class="tip">弹窗内可继续点击其他引致条款。点击空白处或按 Esc 关闭。</p>
   </div>
 </div>
 
@@ -26763,6 +26804,144 @@ function extractSection(lines, idx, num) {
   return null;
 }
 
+// ---------- 引致条款（交叉引用）链接化 ----------
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// 展开引致引用中的条文号：单条 / 枚举（164, 165 and 166）/ 范围（164 to 181）
+function expandRefNums(g1, g2, g3) {
+  const out = [];
+  const add = (n) => {
+    const t = String(n).toLowerCase();
+    if (/^[0-9]{1,4}[a-z]?$/.test(t) && out.indexOf(t) < 0) out.push(t);
+  };
+  add(g1);
+  if (g2) {
+    const mm = String(g2).matchAll(/[0-9]{1,4}[a-z]?/gi);
+    for (const x of mm) add(x[0]);
+  }
+  if (g3) {
+    const lo = parseInt(g1, 10), hi = parseInt(g3, 10);
+    if (!isNaN(lo) && !isNaN(hi)) {
+      const a = Math.min(lo, hi), b = Math.max(lo, hi);
+      if (b - a <= 40) {
+        for (let n = a; n <= b; n++) add(String(n));
+      } else {
+        add(g1); add(g3); // 超大范围：只链首尾，避免展开爆炸
+      }
+    } else {
+      add(g3);
+    }
+  }
+  return out;
+}
+
+// 英文：Section 164 / Sections 164 to 181 / Sections 164, 165 and 166 / section 275 (1) to (3)
+// 捕获组：g1=条文号, g2=款起点, g3=款终点, g4=枚举, g5=条文范围终点
+const XREF_RE = /Sections?\s+(\d{1,4}[a-z]?)(?:\s*\((\d+)\)(?:\s*(?:to|–|—|-)\s*\((\d+)\))?)?((?:\s*[,，]\s*\d{1,4}[a-z]?)*)(?:\s+(?:to|and|or|–|—|-)\s+(\d{1,4}[a-z]?))?/gi;
+
+function linkifyRefs(text) {
+  return text.replace(XREF_RE, (m, g1, g2, g3, g4, g5) => {
+    const nums = expandRefNums(g1, g4, g5);
+    if (!nums.length) return m;
+    let subs = "";
+    if (g2) {
+      const a = parseInt(g2, 10);
+      const b = g3 ? parseInt(g3, 10) : a;
+      subs = Math.min(a, b) + "-" + Math.max(a, b);
+    }
+    return '<a class="xref" data-nums="' + nums.join(",") + '" data-subs="' + subs + '" title="点击查看被引致条款">' + m + "</a>";
+  });
+}
+
+// 中文：第164条 / 第164条至第181条 / 第275条第(1)至(3)款 / 第275条第(2)款
+const ZHREF_RE = /第(\d{1,4}[a-z]?)条第?\((\d+)\)\s*(?:至|到)\s*\((\d+)\)款|第(\d{1,4}[a-z]?)条第?\((\d+)\)款|第(\d{1,4}[a-z]?)条\s*(?:至|到|—|-)\s*第?(\d{1,4}[a-z]?)条|第(\d{1,4}[a-z]?)条/g;
+
+function linkifyZhRefs(text) {
+  return text.replace(ZHREF_RE, (m, a1, s1, s2, a2, s3, a3, a4, a5) => {
+    let nums = [], subs = "";
+    if (a1) {
+      // 第N条第(1)至(3)款
+      nums = [a1];
+      const x = Math.min(+s1, +s2), y = Math.max(+s1, +s2);
+      subs = x + "-" + y;
+    } else if (a2) {
+      // 第N条第(1)款
+      nums = [a2];
+      subs = s3;
+    } else if (a3) {
+      // 第N条至第M条
+      const lo = parseInt(a3, 10), hi = parseInt(a4, 10);
+      if (!isNaN(lo) && !isNaN(hi) && Math.abs(hi - lo) <= 40) {
+        for (let n = Math.min(lo, hi); n <= Math.max(lo, hi); n++) nums.push(String(n));
+      } else {
+        nums.push(a3, a4);
+      }
+    } else if (a5) {
+      // 第N条
+      nums = [a5];
+    }
+    if (!nums.length) return m;
+    return '<a class="xref" data-nums="' + nums.join(",") + '" data-subs="' + subs + '" title="点击查看被引致条款">' + m + "</a>";
+  });
+}
+
+// 在已链接化的 HTML 中高亮被引致的款（(1)至(3)），用于弹窗
+function highlightSubs(html, subs) {
+  if (!subs) return html;
+  const p = String(subs).split("-");
+  const lo = parseInt(p[0], 10), hi = p.length >= 2 ? parseInt(p[1], 10) : lo;
+  if (isNaN(lo)) return html;
+  const set = {};
+  for (let n = lo; n <= hi; n++) set[n] = true;
+  const parts = html.split(/(\(\d+\))/);
+  let out = "", open = false;
+  for (const part of parts) {
+    const m = /^\((\d+)\)$/.exec(part);
+    if (m) {
+      if (open) { out += "</mark>"; open = false; }
+      if (set[parseInt(m[1], 10)]) { out += "<mark>" + part; open = true; }
+      else out += part;
+    } else {
+      out += part;
+    }
+  }
+  if (open) out += "</mark>";
+  return out;
+}
+
+// 被引致条款：英文（官方译本）与中文（本地全量译文，组合条自动归并）
+function findCombinedKey(num) {
+  if (typeof BGB_ZH === "undefined") return null;
+  if (BGB_ZH[num]) return null;
+  const n = parseInt(num, 10);
+  if (isNaN(n)) return null;
+  for (const k of Object.keys(BGB_ZH)) {
+    if (k.indexOf("-") >= 0) {
+      const p = k.split("-");
+      const a = parseInt(p[0], 10), b = parseInt(p[1], 10);
+      if (!isNaN(a) && !isNaN(b) && a <= n && n <= b) return k;
+    }
+  }
+  return null;
+}
+
+function refSectionEn(num) {
+  const lines = loadLines();
+  const idx = buildIndex(lines);
+  return extractSection(lines, idx, num);
+}
+
+function refSectionZh(num) {
+  if (typeof BGB_ZH === "undefined") return null;
+  if (BGB_ZH[num]) return BGB_ZH[num];
+  const ck = findCombinedKey(num);
+  if (ck) return BGB_ZH[ck] + "\n\n（注：本地译文中“第" + ck + "条”为合并条文，已整体显示）";
+  return null;
+}
+
 function parseQuery(text) {
   const t = text.trim().toLowerCase();
   let m = /^([0-9]{1,4}[a-z]?)\s*[-–至]\s*([0-9]{1,4}[a-z]?)$/.exec(t);
@@ -27086,11 +27265,11 @@ function tocNodeText(node) {
         return;
       }
       hideAi();
-      setPre(outEn, text);
+      renderRefs(outEn, text);
       // 本地全量译文：命中则秒出中文，不调 API（离线可用）
       const local = localZh(fetchTexts(q).nums);
       if (local) {
-        setPre(outCn, local);
+        renderZhRefs(outCn, local);
         setStatus("本地译文 · " + q.trim() + "（已内置全量中文，无需联网）");
         return;
       }
@@ -27098,7 +27277,7 @@ function tocNodeText(node) {
       const cfg = loadCfg();
       setStatus("已提取，正在翻译…");
       const cn = await translate(text, cfg);
-      setPre(outCn, cn);
+      renderZhRefs(outCn, cn);
       setStatus("完成 · " + q.trim());
     } catch (e) {
       setStatus("出错: " + e.message, true);
@@ -27118,6 +27297,49 @@ function tocNodeText(node) {
   }
   $("btnCopyEn").addEventListener("click", () => copyPre(outEn));
   $("btnCopyCn").addEventListener("click", () => copyPre(outCn));
+
+  // ---------- 引致条款弹窗 ----------
+  const maskRef = $("maskRef");
+  const refTitle = $("refTitle");
+  const refEn = $("refEn");
+  const refCn = $("refCn");
+
+  // 渲染条文文本：先转义，再把引致条款（Section 164 / 第275条第(1)至(3)款）转为可点击链接
+  function renderRefs(el, text) {
+    el.innerHTML = linkifyRefs(escapeHtml(text));
+  }
+  function renderZhRefs(el, text) {
+    el.innerHTML = linkifyZhRefs(escapeHtml(text));
+  }
+
+  function openRefModal(nums, subs) {
+    if (!nums || !nums.length) return;
+    const enParts = [], zhParts = [];
+    for (const n of nums) {
+      const en = refSectionEn(n);
+      enParts.push(en ? en : "（未找到英文原文 §" + n + "）");
+      const zh = refSectionZh(n);
+      zhParts.push(zh ? zh : "（暂无本地中文译文 §" + n + "）");
+    }
+    const title = "§" + nums.join("、");
+    refTitle.innerHTML = title + (subs ? "（第" + String(subs).replace("-", "至") + "款）" : "") + " · 被引致条款";
+    refEn.innerHTML = highlightSubs(linkifyRefs(escapeHtml(enParts.join("\n\n"))), subs);
+    refCn.innerHTML = highlightSubs(linkifyZhRefs(escapeHtml(zhParts.join("\n\n"))), subs);
+    maskRef.classList.add("show");
+  }
+  function closeRefModal() { maskRef.classList.remove("show"); }
+  $("btnCloseRef").addEventListener("click", closeRefModal);
+  maskRef.addEventListener("click", (e) => { if (e.target === maskRef) closeRefModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRefModal(); });
+
+  // 事件委托：点击任何 .xref 引致链接
+  document.addEventListener("click", (e) => {
+    const a = e.target && e.target.closest ? e.target.closest(".xref") : null;
+    if (!a) return;
+    e.preventDefault();
+    const nums = (a.dataset.nums || "").split(",").filter(Boolean);
+    openRefModal(nums, a.dataset.subs || "");
+  });
 
   // ---------- AI 联想 ----------
   function renderAi(hits, sourceLabel) {
@@ -27297,6 +27519,8 @@ function tocNodeText(node) {
         lines.push("drawerOpen:" + drawer.classList.contains("open"));
         const r = fetchTexts("985");
         lines.push("985:" + (r.text ? "ok" : "fail"));
+        lines.push("xrefEn:" + (linkifyRefs("under section 275 (1) to (3)").indexOf('data-nums="275"') >= 0 && linkifyRefs("under section 275 (1) to (3)").indexOf('data-subs="1-3"') >= 0 ? "ok" : "fail"));
+        lines.push("xrefZh:" + (linkifyZhRefs("第275条第(1)至(3)款规定的").indexOf('data-subs="1-3"') >= 0 ? "ok" : "fail"));
         try {
           const hits = await associate("表见代理", loadCfg());
           lines.push("associate:" + hits.length);
