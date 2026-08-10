@@ -27577,6 +27577,8 @@ function tocNodeText(node) {
   function closeClaims() { claimsPanel.style.display = "none"; document.body.style.overflow = ""; }
   $("btnClaims").addEventListener("click", openClaims);
   $("btnCloseClaims").addEventListener("click", closeClaims);
+  // 深链：?claims=1 自动打开请求权图谱（便于外部直接跳转）
+  if (location.search.indexOf("claims=1") >= 0) openClaims();
   claimsPanel.addEventListener("click", (e) => {
     // 竞合跳转到另一张请求权卡片
     const j = e.target && e.target.closest ? e.target.closest(".comp-jump") : null;
