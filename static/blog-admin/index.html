@@ -40,6 +40,10 @@ textarea#bodyText{min-height:46vh;font-family:ui-monospace,"Cascadia Mono",Conso
 #preview sup{color:var(--green)}
 #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:rgba(0,0,0,.78);color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:99}
 #toast.show{opacity:1}
+#viewLogin{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:68vh}
+#viewLogin .lock{font-size:46px;text-align:center}
+#viewLogin .card{max-width:340px;width:100%}
+#viewLogin input{text-align:center;letter-spacing:2px}
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:50;align-items:center;justify-content:center;padding:20px}
 #overlay.show{display:flex}
 .dialog{background:var(--card);border-radius:14px;padding:18px;width:100%;max-width:420px;max-height:80vh;overflow:auto}
@@ -50,9 +54,25 @@ footer{text-align:center;color:var(--sub);font-size:12px;padding:16px}
 <body>
 <header>
   <h1 id="pageTitle">📝 博客管理</h1>
+  <button id="btnLogout" style="display:none">退出</button>
   <button id="btnSettings">设置</button>
 </header>
 <main>
+  <!-- 登录视图 -->
+  <section id="viewLogin">
+    <div class="card">
+      <div class="lock">🔒</div>
+      <h2 style="text-align:center;margin-bottom:4px">管理员登录</h2>
+      <p style="text-align:center;color:var(--sub);font-size:13px">此页面需要管理员密码</p>
+      <label>管理员密码</label>
+      <input id="loginPwd" type="password" placeholder="••••••••">
+      <div class="row">
+        <button class="primary" id="btnLogin">进入管理</button>
+      </div>
+      <button class="ghost" id="btnLoginSettings" style="width:100%">设置 API 地址</button>
+    </div>
+  </section>
+
   <!-- 列表视图 -->
   <section id="viewList">
     <div class="row">
@@ -96,9 +116,7 @@ footer{text-align:center;color:var(--sub);font-size:12px;padding:16px}
     <h3 style="margin-bottom:8px">⚙️ 设置</h3>
     <label>API 地址（Worker URL）</label>
     <input id="setApi" placeholder="https://lucas-blog-admin.xxx.workers.dev">
-    <label>访问码</label>
-    <input id="setToken" type="password" placeholder="ACCESS_TOKEN">
-    <p style="font-size:12px;color:var(--sub);margin:8px 0">访问码是部署 Worker 时设置的密码，只保存在本机浏览器。</p>
+    <p style="font-size:12px;color:var(--sub);margin:8px 0">API 地址是部署 Worker 时生成的地址，管理员密码在登录页输入。</p>
     <div class="row">
       <button class="primary" id="btnSaveSettings">保存</button>
       <button class="ghost" id="btnCloseSettings">取消</button>
@@ -133,7 +151,7 @@ async function api(path, opts = {}) {
     headers: { "Content-Type": "application/json", "X-Access-Token": token, ...(opts.headers || {}) },
   });
   const data = await r.json().catch(() => ({}));
-  if (r.status === 401) throw new Error("访问码错误，请到设置里修改");
+  if (r.status === 401) throw new Error("管理员密码错误");
   if (!r.ok) throw new Error((data && data.error) || "请求失败 " + r.status);
   return data;
 }
@@ -274,10 +292,47 @@ async function deletePost() {
 
 /* ---------- 视图切换 ---------- */
 function showList() {
+  $("viewLogin").style.display = "none";
   $("viewList").style.display = "";
   $("viewEdit").style.display = "none";
   $("pageTitle").textContent = "📝 博客管理";
+  $("btnLogout").style.display = "";
   loadPosts();
+}
+function showLogin() {
+  $("viewLogin").style.display = "flex";
+  $("viewList").style.display = "none";
+  $("viewEdit").style.display = "none";
+  $("pageTitle").textContent = "🔒 管理员登录";
+  $("btnLogout").style.display = "none";
+  $("loginPwd").value = "";
+  setTimeout(() => $("loginPwd").focus(), 50);
+}
+function doLogin() {
+  const pwd = $("loginPwd").value.trim();
+  if (!pwd) { toast("请输入密码"); return; }
+  localStorage.blog_admin_token = pwd;
+  loadPosts().then(() => toast("✅ 登录成功")).catch((e) => {
+    localStorage.removeItem("blog_admin_token");
+    toast("❌ " + e.message);
+    showLogin();
+  });
+}
+function doLogout() {
+  localStorage.removeItem("blog_admin_token");
+  current = null;
+  posts = [];
+  showLogin();
+}
+function boot() {
+  if (localStorage.blog_admin_token) {
+    loadPosts().then(showList).catch(() => {
+      localStorage.removeItem("blog_admin_token");
+      showLogin();
+    });
+  } else {
+    showLogin();
+  }
 }
 function showEdit() {
   $("viewList").style.display = "none";
@@ -333,12 +388,10 @@ async function showStatus() {
 /* ---------- 设置 ---------- */
 function openSettings() {
   $("setApi").value = localStorage.blog_admin_api || "";
-  $("setToken").value = localStorage.blog_admin_token || "";
   $("overlay").classList.add("show");
 }
 function saveSettings() {
   localStorage.blog_admin_api = $("setApi").value.trim();
-  localStorage.blog_admin_token = $("setToken").value.trim();
   $("overlay").classList.remove("show");
   toast("设置已保存");
   loadPosts();
@@ -349,6 +402,10 @@ $("btnNew").onclick = newPost;
 $("btnRefresh").onclick = loadPosts;
 $("btnStatus").onclick = showStatus;
 $("btnSettings").onclick = openSettings;
+$("btnLogin").onclick = doLogin;
+$("btnLogout").onclick = doLogout;
+$("btnLoginSettings").onclick = openSettings;
+$("loginPwd").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
 $("btnSaveSettings").onclick = saveSettings;
 $("btnCloseSettings").onclick = () => $("overlay").classList.remove("show");
 $("overlay").onclick = (e) => { if (e.target === $("overlay")) $("overlay").classList.remove("show"); };
@@ -367,7 +424,7 @@ $("tabPrev").onclick = () => switchTab("prev");
 $("fDraft").onchange = () => {};
 
 /* 启动 */
-loadPosts();
+boot();
 </script>
 </body>
 </html>
