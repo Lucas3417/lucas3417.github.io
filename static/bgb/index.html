@@ -266,6 +266,11 @@
   .ai-item .ai-num { color: var(--primary); font-weight: 700; margin-right: 6px; }
   .ai-item .ai-title { font-size: 13.5px; }
   .ai-item .ai-reason { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.55; }
+  .back-btn {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--primary);
+  }
+  .back-btn:active { background: #eef1f5; }
 </style>
 </head>
 <body>
@@ -285,58 +290,56 @@
   <div style="background:#e8f0fb;border:1px solid #c9d8ef;color:#1e3a5f;border-radius:10px;padding:8px 12px;font-size:12px;margin-bottom:12px">📄 本地单文件版 · 全量中文译文已内置，可离线查询原文+中文；AI 联想需联网</div>
   <div class="search">
     <input id="inputQ" type="text" inputmode="text" autocomplete="off"
-           placeholder="条文号 985 / 31a / 164-181，或概念如「表见代理」" enterkeyhint="search">
+           placeholder="条文号或关键词" enterkeyhint="search">
     
     <button id="btnGo">查询</button>
   </div>
-  <p class="hint">条文号：<code>985</code> · <code>31a</code> · <code>164-181</code>；概念/关键词走 <b>AI 联想</b>（返回相关条文）</p>
+  <div id="backBar" style="display:none"><button id="btnBack" class="back-btn">← 返回</button></div>
   <p id="status" class="status"></p>
 
   <div class="card" id="aiCard" style="display:none">
-    <h2>AI 联想结果（请核对条文号）</h2>
+    <h2>联想结果</h2>
     <div id="aiList"></div>
   </div>
 
   <div class="card">
     <h2>英文原文 <button class="copy" id="btnCopyEn">复制</button></h2>
-    <pre id="outEn"><span class="empty">输入条文号后点「查询」</span></pre>
+    <pre id="outEn"><span class="empty">输入条文号或关键词</span></pre>
   </div>
 
   <div class="card cn">
     <h2>中文译文 <button class="copy" id="btnCopyCn">复制</button></h2>
-    <pre id="outCn"><span class="empty">译文将显示在这里</span></pre>
+    <pre id="outCn"></pre>
   </div>
 
   <footer>
-    数据来源：德国联邦司法部 gesetze-im-internet.de 官方英译本<br>
-    译文由 AI 生成，仅供学习参考
+    数据来源：德国联邦司法部 gesetze-im-internet.de 官方英译本
   </footer>
 </div>
 
 <div class="drawer-mask" id="drawerMask"></div>
 <aside class="drawer" id="drawer">
   <div class="drawer-head"><b>BGB 目录索引</b><button id="btnCloseToc">✕</button></div>
-  <input id="tocSearch" type="search" placeholder="过滤：条文号或标题关键词" autocomplete="off">
+  <input id="tocSearch" type="search" placeholder="过滤" autocomplete="off">
   <div class="toc-body" id="tocBody"></div>
 </aside>
 
 <!-- 请求权基础图谱面板 -->
 <div class="claims-panel" id="claimsPanel" style="display:none">
-  <div class="claims-head"><b>⚖ 请求权基础规范图谱（41 条）</b><button id="btnCloseClaims">✕</button></div>
+  <div class="claims-head"><b>⚖ 请求权图谱</b><button id="btnCloseClaims">✕</button></div>
   <div class="claims-inner" id="claimsBody"></div>
 </div>
 
 <div class="mask" id="mask">
   <div class="modal">
     <h3>API 设置</h3>
-    <label>API Key（留空 = 使用内置共享 Key；填 = 个人 Key，仅存本机）</label>
-    <input id="cfgKey" type="password" placeholder="留空则使用内置共享 Key">
+    <label>API Key</label>
+    <input id="cfgKey" type="password" placeholder="留空使用共享 Key">
     <label>模型</label>
     <select id="cfgModel" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:#fff"></select>
-    <input id="cfgModelCustom" type="text" placeholder="输入自定义模型名" style="display:none;margin-top:6px">
+    <input id="cfgModelCustom" type="text" placeholder="模型名" style="display:none;margin-top:6px">
     <label>API 地址</label>
     <input id="cfgBase" type="text" placeholder="https://api.deepseek.com">
-    <p class="tip">支持任意 OpenAI 兼容接口：DeepSeek 填 https://api.deepseek.com；其他中转站填其 /v1 地址。个人 Key 仅保存在你自己的浏览器中。</p>
     <div class="row">
       <button class="btn-cancel" id="btnCancel">取消</button>
       <button class="btn-ok" id="btnSave">保存</button>
@@ -351,10 +354,10 @@
     <div class="ref-body">
       <div class="ref-label">英文原文（官方译本）</div>
       <pre id="refEn"></pre>
-      <div class="ref-label">中文译文（本地内置）</div>
+      <div class="ref-label">中文译文</div>
       <pre id="refCn" class="cn"></pre>
     </div>
-    <p class="tip">弹窗内可继续点击其他引致条款。点击空白处或按 Esc 关闭。</p>
+    <p class="tip">弹窗内可继续点击其他引致条款</p>
   </div>
 </div>
 
@@ -30139,6 +30142,54 @@ async function associateDeCcl(nums, cfg) {
   const $ = (id) => document.getElementById(id);
   const inputQ = $("inputQ"), btnGo = $("btnGo"), statusEl = $("status");
   const outEn = $("outEn"), outCn = $("outCn");
+  let lastQuery = "";
+
+  // ---------- 返回导航栈 ----------
+  const backBar = $("backBar"), btnBack = $("btnBack");
+  const backStack = [];
+  function renderBack() {
+    backBar.style.display = backStack.length ? "block" : "none";
+  }
+  function pushBack(label, restore) {
+    const top = backStack[backStack.length - 1];
+    if (top && top.label === label) backStack.pop();
+    backStack.push({ label, restore });
+    renderBack();
+  }
+  function goBack() {
+    const t = backStack.pop();
+    renderBack();
+    if (t) t.restore();
+  }
+  btnBack.addEventListener("click", goBack);
+
+  // ---------- 精准条目标题 ----------
+  function bgbTitle(num) {
+    const z = BGB_ZH[String(num)];
+    if (!z) return "";
+    const first = z.split("\n", 1)[0].trim().replace(/^\*\*|\*\*$/g, "");
+    const m = first.match(/^第\d+[a-z]?条\s*(.*)$/);
+    if (m && m[1].trim()) return m[1].trim();
+    const lines = z.split("\n");
+    if (lines.length >= 2) {
+      const t2 = lines[1].trim();
+      if (t2 && !/^[（(]?\d+[)）]/.test(t2) && t2.length <= 30 && !/[。；，：]$/.test(t2)) return t2;
+    }
+    return "";
+  }
+  function cclTitle(num) {
+    const a = CCL_DATA[String(num)];
+    if (!a) return "";
+    const t = a.t;
+    for (const sep of ["，", "。", "；", "：", "、"]) {
+      const i = t.indexOf(sep);
+      if (i > 0 && i <= 16) return t.slice(0, i);
+    }
+    return t.slice(0, 16);
+  }
+  function preciseTitle(h) {
+    return h._ccl ? cclTitle(h.num) : bgbTitle(h.num);
+  }
 
   function setStatus(msg, isErr) {
     statusEl.textContent = msg || "";
@@ -30167,33 +30218,34 @@ async function associateDeCcl(nums, cfg) {
         }
         if (local && local.length) {
           hideAi();
-          renderAi(local, "本地匹配（毫秒级）");
-          setStatus("本地联想命中 " + local.length + " 条（无需 AI，秒回）。点击条目查看条文");
+          renderAi(local, "本地匹配");
+          setStatus("本地命中 " + local.length + " 条");
           return;
         }
         hideAi();
-        setStatus("条文号未识别，正在 AI 联想…");
+        setStatus("AI 联想中…");
         const hits = await associate(q, loadCfg());
         if (!hits.length) {
-          setStatus(error + "（AI 联想也未命中，换个关键词试试）", true);
+          setStatus(error + " · 未命中", true);
           return;
         }
-        renderAi(hits);
-        setStatus("AI 联想结果（AI 生成，请核对条文号）。点击条目查看条文");
+        renderAi(hits, "AI 联想");
+        setStatus("AI 联想 " + hits.length + " 条");
         return;
       }
       hideAi();
+      lastQuery = q;
       renderRefs(outEn, text);
       // 本地全量译文：命中则秒出中文，不调 API（离线可用）
       const nums = fetchTexts(q).nums;
       const local = localZh(nums);
       if (local) {
         renderZhRefs(outCn, local);
-        setStatus("本地译文 · " + q.trim() + "（已内置全量中文）");
+        setStatus("本地译文 · " + q.trim());
       } else {
         setPre(outCn, "");
         const cfg = loadCfg();
-        setStatus("已提取，正在翻译…");
+        setStatus("翻译中…");
         const cn = await translate(text, cfg);
         renderZhRefs(outCn, cn);
         setStatus("完成 · " + q.trim());
@@ -30326,8 +30378,7 @@ async function associateDeCcl(nums, cfg) {
       + order.map((t, i) => '<span class="nav-chip" data-group="' + i + '">' + t + "（" + groups[t].length + "）</span>").join("")
       + "</div>";
     const intro =
-      '<div class="claims-intro">⚖ <b>请求权基础（Anspruchsgrundlagen）图谱</b>：以"请求目标 → 构成要件 → 抗辩 → 法律效果"为骨架组织核心请求权规范。'
-      + "条文号可点击查看中英全文；竞合条目可跳转对应请求权卡片。共 " + BGB_CLAIMS.length + " 条，按类型分组。</div>";
+      '<div class="claims-intro">⚖ <b>请求权基础（Anspruchsgrundlagen）图谱</b>：以"请求目标 → 构成要件 → 抗辩 → 法律效果"为骨架组织核心请求权规范。</div>';
     let html = intro + nav;
     order.forEach((t, gi) => {
       html += '<div class="claim-group" data-group="' + gi + '"><h2 class="claim-group-title">' + t + "</h2>";
@@ -30385,7 +30436,7 @@ async function associateDeCcl(nums, cfg) {
       num.textContent = "§" + h.num;
       const title = document.createElement("span");
       title.className = "ai-title";
-      title.textContent = h.title;
+      title.textContent = preciseTitle(h) || h.title || ("§" + h.num);
       line.appendChild(num);
       line.appendChild(title);
       d.appendChild(line);
@@ -30396,7 +30447,16 @@ async function associateDeCcl(nums, cfg) {
         d.appendChild(r);
       }
       d.addEventListener("click", () => {
-        if (h._ccl) { showCclFull(h.num); return; }
+        if (h._ccl) {
+          if (sourceLabel && sourceLabel.indexOf("对照") >= 0) {
+            pushBack("返回原条文", () => { inputQ.value = lastQuery; run(); });
+          } else {
+            pushBack("返回检索结果", () => renderAi(hits.slice(), sourceLabel));
+          }
+          showCclFull(h.num);
+          return;
+        }
+        pushBack("返回检索结果", () => renderAi(hits.slice(), sourceLabel));
         loadSection(h.num);
       });
       box.appendChild(d);
@@ -30413,28 +30473,27 @@ async function associateDeCcl(nums, cfg) {
         const lst = DE_CCL_MAP[String(n)];
         if (lst) {
           for (const [cn, note] of lst) {
-            const a = CCL_DATA[String(cn)];
-            const title = "民法典·" + (a ? (a.c || a.n) : cn);
+            const title = cclTitle(cn) || ("民法典·" + cn);
             hits.push({ num: cn, title: title, reason: note, _ccl: true });
           }
         }
       }
       if (hits.length) {
-        renderAi(hits, "本地对照（民法典对应条款）");
-        setStatus("民法典对应条款命中 " + hits.length + " 条（本地映射，秒回）。点击条目查看民法典全文");
+        renderAi(hits, "民法典对照");
+        setStatus("民法典对照 " + hits.length + " 条");
         return;
       }
     }
     // 本地未命中 → AI 兜底
     const cfg = loadCfg();
     if (!cfg || !cfg.apiKey) {
-      setStatus("该条暂无本地映射，配置 API Key 后可 AI 对照民法典对应条款");
+      setStatus("无本地映射");
       return;
     }
-    setStatus("正在 AI 对照民法典对应条款...");
+    setStatus("AI 对照中…");
     associateDeCcl(nums, cfg).then((ai) => {
-      if (ai && ai.length) renderAi(ai, "AI 对照（民法典对应条款）");
-      else setStatus("已完成查询；AI 未返回民法典对应条款（该条文可能无高度对应制度）");
+      if (ai && ai.length) renderAi(ai, "AI 对照");
+      else setStatus("未找到对应条款");
     }).catch((e) => setStatus("AI 对照失败: " + e.message, true));
   }
 
@@ -30443,9 +30502,9 @@ async function associateDeCcl(nums, cfg) {
     if (!t) return;
     hideAi();
     inputQ.value = num;
-    outEn.innerHTML = '<p class="tip">（民法典条文：无官方英文版，请查看“中文译文”）</p>';
+    outEn.innerHTML = '<p class="tip">（民法典无英文版）</p>';
     outCn.innerHTML = '<pre>' + escapeHtml(t) + "</pre>";
-    setStatus("民法典本地全文 · 第" + num + "条");
+    setStatus("民法典 · 第" + num + "条");
   }
 
   function loadSection(num) {
@@ -30493,7 +30552,7 @@ async function associateDeCcl(nums, cfg) {
       n.children.forEach(walk);
     })(tocRoot);
     if (!items.length) {
-      tocBody.innerHTML = '<div class="toc-empty">无匹配（试试 985 / 31a，或英文标题关键词）</div>';
+      tocBody.innerHTML = '<div class="toc-empty">无匹配</div>';
       return;
     }
     items.forEach((n) => {
@@ -30572,13 +30631,12 @@ async function associateDeCcl(nums, cfg) {
       base_url: $("cfgBase").value.trim() || defBase,
     };    saveCfg(cfg);
     mask.classList.remove("show");
-    setStatus(cfg.api_key ? "设置已保存（个人 Key）" : "设置已保存（共享模式）");
+    setStatus("已保存");
   });
   mask.addEventListener("click", (e) => { if (e.target === mask) mask.classList.remove("show"); });
 
-  // 示例提示
-  if (loadCfg().use_shared) setStatus("内置共享模式 · 直接输入条文号查询，或输入概念走 AI 联想");
-  else setStatus("个人 Key 模式 · 直接输入条文号查询，或输入概念走 AI 联想");
+  // 就绪
+  setStatus("");
 
   // e2e 自测钩子（?e2e=1，供无头测试；API 失败不中断，UI 项单独验证）
   if (location.search.indexOf("e2e=1") >= 0) {
