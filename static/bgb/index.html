@@ -287,7 +287,6 @@
     </div>
   </header>
 
-  <div style="background:#e8f0fb;border:1px solid #c9d8ef;color:#1e3a5f;border-radius:10px;padding:8px 12px;font-size:12px;margin-bottom:12px">📄 本地单文件版 · 全量中文译文已内置，可离线查询原文+中文；AI 联想需联网</div>
   <div class="search">
     <input id="inputQ" type="text" inputmode="text" autocomplete="off"
            placeholder="条文号或关键词" enterkeyhint="search">
@@ -29369,17 +29368,32 @@ function saveCfg(cfg) {
   localStorage.setItem("bgb_cfg", JSON.stringify(cfg));
 }
 
+// 英文全文行 + 条文号索引：惰性构建一次，供 fetchTexts/refSectionEn/associateDeCcl 复用
+let _LINES = null, _IDX = null;
+function getLines() {
+  if (_LINES === null) {
+    _LINES = BGB_TEXT.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  }
+  return _LINES;
+}
+function getIndex() {
+  if (_IDX === null) {
+    const idx = {};
+    getLines().forEach((ln, i) => {
+      const m = SECTION_RE.exec(ln);
+      if (m) idx[m[1].toLowerCase()] = i;
+    });
+    _IDX = idx;
+  }
+  return _IDX;
+}
+
 function loadLines() {
-  return BGB_TEXT.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  return getLines();
 }
 
 function buildIndex(lines) {
-  const idx = {};
-  lines.forEach((ln, i) => {
-    const m = SECTION_RE.exec(ln);
-    if (m) idx[m[1].toLowerCase()] = i;
-  });
-  return idx;
+  return getIndex();
 }
 
 function coveredByCombined(line, target) {
@@ -29473,7 +29487,7 @@ function linkifyRefs(text) {
       const b = g3 ? parseInt(g3, 10) : a;
       subs = Math.min(a, b) + "-" + Math.max(a, b);
     }
-    return '<a class="xref" data-nums="' + nums.join(",") + '" data-subs="' + subs + '" title="点击查看被引致条款">' + m + "</a>";
+    return '<a class="xref" data-nums="' + nums.join(",") + '" data-subs="' + subs + '">' + m + "</a>";
   });
 }
 
@@ -29505,7 +29519,7 @@ function linkifyZhRefs(text) {
       nums = [a5];
     }
     if (!nums.length) return m;
-    return '<a class="xref" data-nums="' + nums.join(",") + '" data-subs="' + subs + '" title="点击查看被引致条款">' + m + "</a>";
+    return '<a class="xref" data-nums="' + nums.join(",") + '" data-subs="' + subs + '">' + m + "</a>";
   });
 }
 
@@ -29534,32 +29548,42 @@ function highlightSubs(html, subs) {
 }
 
 // 被引致条款：英文（官方译本）与中文（本地全量译文，组合条自动归并）
+let _COMBO_KEYS = null;
+function comboKeys() {
+  if (_COMBO_KEYS === null) {
+    _COMBO_KEYS = [];
+    if (typeof BGB_ZH !== "undefined") {
+      for (const k of Object.keys(BGB_ZH)) {
+        if (k.indexOf("-") >= 0) {
+          const p = k.split("-");
+          const a = parseInt(p[0], 10), b = parseInt(p[1], 10);
+          if (!isNaN(a) && !isNaN(b)) _COMBO_KEYS.push([a, b, k]);
+        }
+      }
+    }
+  }
+  return _COMBO_KEYS;
+}
 function findCombinedKey(num) {
   if (typeof BGB_ZH === "undefined") return null;
   if (BGB_ZH[num]) return null;
   const n = parseInt(num, 10);
   if (isNaN(n)) return null;
-  for (const k of Object.keys(BGB_ZH)) {
-    if (k.indexOf("-") >= 0) {
-      const p = k.split("-");
-      const a = parseInt(p[0], 10), b = parseInt(p[1], 10);
-      if (!isNaN(a) && !isNaN(b) && a <= n && n <= b) return k;
-    }
+  for (const [a, b, k] of comboKeys()) {
+    if (a <= n && n <= b) return k;
   }
   return null;
 }
 
 function refSectionEn(num) {
-  const lines = loadLines();
-  const idx = buildIndex(lines);
-  return extractSection(lines, idx, num);
+  return extractSection(getLines(), getIndex(), num);
 }
 
 function refSectionZh(num) {
   if (typeof BGB_ZH === "undefined") return null;
   if (BGB_ZH[num]) return BGB_ZH[num];
   const ck = findCombinedKey(num);
-  if (ck) return BGB_ZH[ck] + "\n\n（注：本地译文中“第" + ck + "条”为合并条文，已整体显示）";
+  if (ck) return BGB_ZH[ck];
   return null;
 }
 
@@ -29578,10 +29602,10 @@ function parseQuery(text) {
 }
 
 function fetchTexts(query) {
-  const lines = loadLines();
-  const idx = buildIndex(lines);
   const nums = parseQuery(query);
   if (!nums.length) return { text: null, error: "无法识别的条文号，请输入如 985、31a、164-181" };
+  const lines = getLines();
+  const idx = getIndex();
   const parts = [];
   const missing = [];
   for (const n of nums) {
@@ -29623,9 +29647,11 @@ async function translate(text, cfg) {
     ],
     stream: false,
   };
-  // DeepSeek：较低温度保持译文稳定；Kimi：仅允许 temperature=1 且默认开思维链，关闭省 token
-  // 注意：kimi-k2.7-code 系列不接受 thinking 参数（传 disabled 会 HTTP 400），只对 k2.6/k3 关闭思维链
-  if (url.indexOf("moonshot") >= 0) {
+  // DeepSeek 系模型：显式关闭思考模式（更快、不产生 reasoning tokens）
+  // Kimi：仅允许 temperature=1，k2.6/k3 显式关闭思维链；k2.7-code 不接受 thinking 参数
+  if (/^deepseek-/.test(cfg.model)) {
+    body.thinking = { type: "disabled" };
+  } else if (url.indexOf("moonshot") >= 0) {
     if (!/k2\.7-code/i.test(cfg.model)) body.thinking = { type: "disabled" };
   } else {
     body.temperature = 0.2;
@@ -29654,9 +29680,15 @@ async function translate(text, cfg) {
 
 // ---------- 本地快速联想（毫秒级，无需 API） ----------
 
+// 目录标题字典：num → 英文标题（构建一次，O(1) 查询）
+const TOC_TITLE_MAP = (() => {
+  const m = {};
+  for (const it of BGB_TOC) if (it[0] === 5 && it[1].indexOf("-") < 0) m[it[1]] = it[2] || "";
+  return m;
+})();
+
 function tocTitle(num) {
-  for (const it of BGB_TOC) if (it[0] === 5 && it[1] === num) return it[2] || "";
-  return "";
+  return TOC_TITLE_MAP[num] || "";
 }
 
 // 中文/德文民法概念 → 相关条文号（人工精选，覆盖常用主题）
@@ -29861,6 +29893,27 @@ function makeSnippet(text, pos, term) {
   return (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
 }
 
+// 预构建检索文档数组（构建一次，避免每次搜索重建 2500+ 条目）
+let _BGB_DOCS = null, _CCL_DOCS = null;
+function searchDocs(code) {
+  if (code === "ccl") {
+    if (_CCL_DOCS === null) {
+      _CCL_DOCS = Object.keys(CCL_DATA).map((n) => ({ num: n, text: CCL_DATA[n].t, title: CCL_DATA[n].c || "" }));
+    }
+    return _CCL_DOCS;
+  }
+  if (_BGB_DOCS === null) {
+    _BGB_DOCS = Object.keys(BGB_ZH).map((n) => ({ num: n, text: BGB_ZH[n], title: tocTitle(n) || "" }));
+  }
+  return _BGB_DOCS;
+}
+
+function countOcc(text, term) {
+  let c = 0, i = 0;
+  while ((i = text.indexOf(term, i)) >= 0) { c++; i += term.length; }
+  return c;
+}
+
 // 本地全文检索：精确 +2/处、同义词 +1.5/处、标题命中 +2、概念映射 +3；top 15。
 // 返回 [{num, title, reason, snippet}] 或 null
 function searchLocal(query, code) {
@@ -29868,14 +29921,11 @@ function searchLocal(query, code) {
   if (!q) return null;
   const syns = expandSynTerms(q);
   const [conceptNums, conceptNames] = matchConcepts(q, code === "ccl" ? CCL_CONCEPTS : BGB_CONCEPTS);
-  const items = code === "ccl"
-    ? Object.keys(CCL_DATA).map((n) => ({ num: n, text: CCL_DATA[n].t, title: CCL_DATA[n].c || "" }))
-    : Object.keys(BGB_ZH).map((n) => ({ num: n, text: BGB_ZH[n], title: tocTitle(n) || "" }));
   const scored = [];
-  for (const it of items) {
+  for (const it of searchDocs(code)) {
     let score = 0, firstPos = null, firstTerm = null;
     const reasons = [];
-    const c0 = it.text.split(q).length - 1;
+    const c0 = countOcc(it.text, q);
     if (c0) {
       score += 2 * Math.min(c0, 20);
       const pos = it.text.indexOf(q);
@@ -29883,7 +29933,7 @@ function searchLocal(query, code) {
       reasons.push("精确命中");
     }
     for (const t of syns) {
-      const c = it.text.split(t).length - 1;
+      const c = countOcc(it.text, t);
       if (c) {
         score += 1.5 * Math.min(c, 20);
         const pos = it.text.indexOf(t);
@@ -29981,7 +30031,9 @@ async function associate(query, cfg) {
     ],
     stream: false,
   };
-  if (url.indexOf("moonshot") >= 0) {
+  if (/^deepseek-/.test(cfg.model)) {
+    body.thinking = { type: "disabled" };
+  } else if (url.indexOf("moonshot") >= 0) {
     if (!/k2\.7-code/i.test(cfg.model)) body.thinking = { type: "disabled" };
   } else {
     body.temperature = 0.2;
@@ -30039,49 +30091,6 @@ function tocNodeText(node) {
   if (node.depth >= 5) return (node.title && node.title.toLowerCase().startsWith("(repealed)")) ? "§" + node.label + "  [已废止]" : "§" + node.label + "  " + node.title;
   return node.label + "  " + node.title;
 }
-// ---------- AI 民法典联想（条文号必须本地存在，防幻觉） ----------
-const ASSOCIATE_PROMPT_CCL = "你是精通《中华人民共和国民法典》的法律专家。用户给出一个法律概念、关键词或研究主题，请联想民法典中最相关的条文。只输出 JSON 数组，不要任何其他文字（不要 markdown 代码块）：[{\"s\": \"条文号\", \"r\": \"与该概念相关的一句中文理由\"}] 条文号 s 只写 1-1260 的阿拉伯数字，不超过 8 条，按相关度降序。若完全无关，输出 []。";
-const CCL_ASSOC_CACHE = new Map();
-async function associateCcl(query, cfg) {
-  if (CCL_ASSOC_CACHE.has(query)) return CCL_ASSOC_CACHE.get(query);
-  const payload = {
-    model: cfg.model,
-    messages: [
-      { role: "system", content: ASSOCIATE_PROMPT_CCL },
-      { role: "user", content: "概念/主题：" + query },
-    ],
-  };
-  const body = JSON.stringify(payload);
-  let resp;
-  try {
-    resp = await fetch(cfg.endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-  } catch (e) {
-    throw new Error("网络请求失败: " + e.message);
-  }
-  if (!resp.ok) {
-    let msg = "联想请求失败 (HTTP " + resp.status + ")";
-    try { const j = await resp.json(); if (j && j.error) msg += " " + j.error.message; } catch (_e) {}
-    throw new Error(msg);
-  }
-  const data = await resp.json();
-  const content = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
-  const mm = content.match(/\[[\s\S]*\]/);
-  let arr = [];
-  if (mm) { try { arr = JSON.parse(mm[0]); } catch (_e) { arr = []; } }
-  const out = [];
-  if (Array.isArray(arr)) {
-    for (const it of arr) {
-      const s = String((it && it.s) || "").trim();
-      const r = String((it && it.r) || "").trim();
-      if (/^[1-9][0-9]{0,3}$/.test(s)) {
-        const a = CCL_DATA[s];
-        if (a) out.push({ num: s, title: a.c || "", reason: r, snippet: a.t.slice(0, 60) });
-      }
-    }
-  }
-  CCL_ASSOC_CACHE.set(query, out);
-  return out;
-}
 // ---------- AI 德→中对照（民法典对应条款，条文号本地校验防幻觉） ----------
 const ASSOCIATE_PROMPT_DE_CCL = "你是精通德国与中国民法的比较法专家。用户给出《德国民法典》(BGB) 条文号及其中文译文，请找出《中华人民共和国民法典》中与其立法目的、功能最相近的条文。只输出 JSON 数组，不要任何其他文字（不要 markdown 代码块）：[{\"s\": \"民法典条文号\", \"r\": \"与该 BGB 条文功能对应的一句中文理由\"}] 条文号 s 只写 1-1260 的阿拉伯数字，不超过 5 条，按相关度降序。若确无对应条文，输出 []。";
 const DE_CCL_ASSOC_CACHE = new Map();
@@ -30103,8 +30112,10 @@ async function associateDeCcl(nums, cfg) {
     ],
     stream: false,
   };
-  if (url.indexOf("moonshot") >= 0) {
-    if (!/k2\\.7-code/i.test(cfg.model)) body.thinking = { type: "disabled" };
+  if (/^deepseek-/.test(cfg.model)) {
+    body.thinking = { type: "disabled" };
+  } else if (url.indexOf("moonshot") >= 0) {
+    if (!/k2\.7-code/i.test(cfg.model)) body.thinking = { type: "disabled" };
   } else {
     body.temperature = 0.2;
   }
