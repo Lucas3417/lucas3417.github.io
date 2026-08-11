@@ -285,7 +285,7 @@
   <div class="search">
     <input id="inputQ" type="text" inputmode="text" autocomplete="off"
            placeholder="条文号 985 / 31a / 164-181，或概念如「表见代理」" enterkeyhint="search">
-    <select id="codeSel" style="margin-right:8px;padding:4px;border-radius:6px;border:1px solid #ccc;background:#fff;"><option value="bgb">德国民法典</option><option value="ccl">中国民法典</option></select>
+    
     <button id="btnGo">查询</button>
   </div>
   <p class="hint">条文号：<code>985</code> · <code>31a</code> · <code>164-181</code>；概念/关键词走 <b>AI 联想</b>（返回相关条文）</p>
@@ -29111,6 +29111,173 @@ const CCL_DATA = {
 };
 </script>
 <script>
+// BGB 条文 → 中国民法典对应条款映射（立法目的/功能类似）
+// 数据源：桌面版 de_ccl_map.py，勿手改
+const DE_CCL_MAP = {
+  "116": [["136", "意思表示的生效"]],
+  "117": [["137", "对话/非对话意思表示"]],
+  "118": [["138", "无相对人的意思表示"]],
+  "119": [["142", "意思表示的解释"]],
+  "121": [["143", "民事法律行为的生效要件"]],
+  "123": [["147", "重大误解可撤销"]],
+  "124": [["148", "欺诈可撤销"]],
+  "125": [["149", "第三人欺诈"]],
+  "126": [["150", "胁迫可撤销"]],
+  "134": [["151", "显失公平可撤销"]],
+  "138": [["153", "违反法律强制性规定/公序良俗无效"]],
+  "139": [["155", "部分无效"]],
+  "142": [["156", "无效/被撤销的溯及力"]],
+  "157": [["157", "无效/被撤销后的返还与赔偿"]],
+  "164": [["161", "代理的构成"]],
+  "165": [["162", "代理权"]],
+  "166": [["164", "代理行为效力归属"]],
+  "167": [["165", "委托代理授权"]],
+  "168": [["166", "授权不明的责任"]],
+  "170": [["172", "表见代理"]],
+  "171": [["171", "无权代理（未被追认）"]],
+  "177": [["171", "无权代理"]],
+  "178": [["171", "无权代理的追认"]],
+  "179": [["171", "相对人催告与撤销"]],
+  "180": [["171", "无权代理人的责任"]],
+  "194": [["188", "诉讼时效期间"]],
+  "195": [["188", "时效起算"]],
+  "196": [["189", "分期履行时效起算"]],
+  "199": [["190", "无/限制行为能力人时效"]],
+  "203": [["194", "时效中止"]],
+  "212": [["192", "时效届满的效果"]],
+  "214": [["192", "时效援用"]],
+  "222": [["193", "时效利益不得预先放弃"]],
+  "241": [["577", "债务不履行的违约责任"]],
+  "242": [["7", "诚实信用原则"]],
+  "249": [["179", "赔偿损失的责任方式"]],
+  "275": [["580", "非金钱债务履行不能"]],
+  "280": [["577", "给付障碍损害赔偿"]],
+  "281": [["584", "迟延履行损失赔偿"]],
+  "285": [["593", "第三人原因不免责"]],
+  "305": [["496", "格式条款定义与提示说明义务"]],
+  "306": [["497", "格式条款无效情形"]],
+  "307": [["497", "格式条款无效情形"]],
+  "309": [["498", "格式条款解释规则"]],
+  "311": [["500", "缔约过失责任"]],
+  "313": [["533", "情势变更"]],
+  "336": [["586", "定金合同与定金数额"]],
+  "338": [["587", "定金罚则"]],
+  "339": [["585", "违约金"]],
+  "340": [["585", "违约金调整"]],
+  "343": [["585", "违约金与实际损失"]],
+  "346": [["562", "约定解除"]],
+  "349": [["563", "法定解除"]],
+  "354": [["566", "合同解除的效力"]],
+  "362": [["509", "全面履行与诚信履行"]],
+  "364": [["511", "履行规则"]],
+  "372": [["570", "提存的条件"]],
+  "378": [["572", "提存的通知"]],
+  "387": [["568", "抵销的条件"]],
+  "388": [["568", "抵销的行使"]],
+  "396": [["570", "抵销的溯及力"]],
+  "397": [["575", "债务免除"]],
+  "398": [["545", "债权转让"]],
+  "399": [["545", "债权转让的限制"]],
+  "404": [["546", "债权转让通知"]],
+  "433": [["598", "出卖人交付义务"]],
+  "434": [["615", "标的物权利瑕疵担保"]],
+  "435": [["613", "第三人权利负担"]],
+  "437": [["617", "权利瑕疵担保责任"]],
+  "446": [["604", "风险负担（交付时转移）"]],
+  "447": [["607", "货交承运人风险转移"]],
+  "488": [["667", "借款合同定义"]],
+  "516": [["657", "赠与合同定义"]],
+  "518": [["658", "赠与的任意撤销"]],
+  "521": [["660", "公益赠与的强制履行"]],
+  "531": [["663", "赠与的法定撤销"]],
+  "535": [["703", "租赁合同定义"]],
+  "536": [["708", "出租人交付义务"]],
+  "537": [["709", "租赁物的使用"]],
+  "540": [["714", "租赁物维修"]],
+  "543": [["716", "承租人转租"]],
+  "546": [["720", "租金支付"]],
+  "549": [["722", "承租人逾期支付租金"]],
+  "631": [["770", "承揽合同定义"]],
+  "633": [["781", "承揽人瑕疵担保"]],
+  "634": [["781", "承揽人瑕疵责任"]],
+  "648": [["778", "定作人协助义务"]],
+  "662": [["919", "委托合同定义"]],
+  "667": [["922", "受托人报告义务"]],
+  "670": [["927", "受托人转移财产义务"]],
+  "675": [["919", "委托合同类推适用"]],
+  "677": [["979", "无因管理（适法管理）"]],
+  "678": [["980", "管理方法违反本人意思"]],
+  "683": [["979", "适法管理人的求偿权"]],
+  "688": [["888", "保管合同定义"]],
+  "692": [["890", "保管人的注意义务"]],
+  "701": [["891", "保管人不得转保管"]],
+  "765": [["681", "保证合同定义"]],
+  "767": [["691", "保证责任范围"]],
+  "771": [["687", "一般保证先诉抗辩权"]],
+  "777": [["692", "保证期间"]],
+  "812": [["985", "不当得利返还请求权"]],
+  "813": [["985", "不当得利的构成（无法律根据）"]],
+  "817": [["985", "给付不当得利（目的不达）"]],
+  "818": [["986", "得利人的返还范围"]],
+  "819": [["987", "恶意得利人的加重责任"]],
+  "822": [["988", "第三人无偿得利"]],
+  "823": [["1165", "过错责任一般条款"]],
+  "824": [["1024", "名誉权保护"]],
+  "826": [["1165", "故意悖俗侵权的过错责任"]],
+  "828": [["1188", "无/限制行为能力人致害责任"]],
+  "830": [["1191", "用人单位责任"]],
+  "831": [["1191", "用人者责任"]],
+  "832": [["1245", "饲养动物损害责任"]],
+  "833": [["1245", "饲养动物损害责任"]],
+  "834": [["1245", "动物饲养人/管理人责任"]],
+  "836": [["1252", "建筑物倒塌致害责任"]],
+  "838": [["1252", "建筑物上的搁置物坠落致害"]],
+  "854": [["458", "占有的定义"]],
+  "861": [["462", "占有返还请求权"]],
+  "862": [["462", "占有妨害排除请求权"]],
+  "903": [["240", "所有权的一般规定"]],
+  "906": [["288", "相邻关系处理原则"]],
+  "909": [["296", "相邻用水排水"]],
+  "910": [["293", "相邻通行"]],
+  "929": [["224", "动产交付转移所有权"]],
+  "930": [["227", "占有改定"]],
+  "931": [["227", "指示交付"]],
+  "932": [["311", "善意取得（动产）"]],
+  "934": [["311", "善意取得（占有改定情形）"]],
+  "935": [["312", "遗失物的追回"]],
+  "985": [["235", "返还原物请求权"]],
+  "986": [["235", "占有人有权占有的抗辩"]],
+  "987": [["460", "善意占有人费用求偿"]],
+  "994": [["235", "返还原物请求权"]],
+  "1004": [["236", "排除妨害、消除危险请求权"]],
+  "1006": [["236", "妨害排除"]],
+  "1008": [["297", "共有的定义"]],
+  "1009": [["299", "按份共有份额转让"]],
+  "1011": [["301", "共有物的处分与管理"]],
+  "1113": [["394", "抵押权定义"]],
+  "1117": [["406", "抵押物转让"]],
+  "1120": [["409", "抵押权的顺位"]],
+  "1142": [["412", "抵押权与抵押物被查封扣押"]],
+  "1204": [["425", "质权定义"]],
+  "1205": [["429", "动产质权的设立（交付）"]],
+  "1253": [["447", "留置权定义"]],
+  "1297": [["1049", "婚姻自由"]],
+  "1353": [["1043", "夫妻平等与忠实义务"]],
+  "1355": [["1055", "夫妻姓名权"]],
+  "1363": [["1062", "夫妻共同财产"]],
+  "1589": [["1045", "亲属的范围"]],
+  "1601": [["1067", "父母子女抚养义务"]],
+  "1615": [["1071", "非婚生子女的认领与抚养"]],
+  "1626": [["1058", "父母对子女的监护职责"]],
+  "1908": [["26", "监护人的确定"]],
+  "1922": [["1120", "继承的开始"]],
+  "1924": [["1127", "法定继承顺序"]],
+  "1925": [["1127", "法定继承顺序"]],
+  "1937": [["1133", "遗嘱自由"]],
+  "2064": [["1133", "遗嘱继承"]],
+};
+</script>
+<script>
 /* BGB Helper 网页版 - 核心逻辑 */
 "use strict";
 
@@ -29901,6 +30068,59 @@ async function associateCcl(query, cfg) {
   CCL_ASSOC_CACHE.set(query, out);
   return out;
 }
+// ---------- AI 德→中对照（民法典对应条款，条文号本地校验防幻觉） ----------
+const ASSOCIATE_PROMPT_DE_CCL = "你是精通德国与中国民法的比较法专家。用户给出《德国民法典》(BGB) 条文号及其中文译文，请找出《中华人民共和国民法典》中与其立法目的、功能最相近的条文。只输出 JSON 数组，不要任何其他文字（不要 markdown 代码块）：[{\"s\": \"民法典条文号\", \"r\": \"与该 BGB 条文功能对应的一句中文理由\"}] 条文号 s 只写 1-1260 的阿拉伯数字，不超过 5 条，按相关度降序。若确无对应条文，输出 []。";
+const DE_CCL_ASSOC_CACHE = new Map();
+async function associateDeCcl(nums, cfg) {
+  const key = nums.join(",");
+  if (DE_CCL_ASSOC_CACHE.has(key)) return DE_CCL_ASSOC_CACHE.get(key);
+  const texts = [];
+  for (const n of nums) {
+    const en = refSectionEn(n) || "";
+    const zh = refSectionZh(n) || "";
+    texts.push("§" + n + "\\n英文: " + en.slice(0, 2000) + "\\n中文: " + zh.slice(0, 1200));
+  }
+  const url = cfg.base_url.replace(/\/+$/, "") + "/chat/completions";
+  const body = {
+    model: cfg.model,
+    messages: [
+      { role: "system", content: ASSOCIATE_PROMPT_DE_CCL },
+      { role: "user", content: "BGB 条文：\\n\\n" + texts.join("\\n\\n") },
+    ],
+    stream: false,
+  };
+  if (url.indexOf("moonshot") >= 0) {
+    if (!/k2\\.7-code/i.test(cfg.model)) body.thinking = { type: "disabled" };
+  } else {
+    body.temperature = 0.2;
+  }
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.api_key },
+    body: JSON.stringify(body),
+  }).catch(() => { throw new Error("无法连接 API 服务器，请检查网络或更换模型/地址"); });
+  if (!resp.ok) {
+    let msg = "联想请求失败 (HTTP " + resp.status + ")";
+    try { const d = await resp.json(); if (d.error && d.error.message) msg += "\\n" + d.error.message; } catch (e) {}
+    throw new Error(msg);
+  }
+  const data = await resp.json();
+  const content = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
+  const m = content.match(/\\[[\\s\\S]*\\]/);
+  let arr = [];
+  if (m) { try { arr = JSON.parse(m[0]); } catch (e) { arr = []; } }
+  const out = [];
+  for (const it of (Array.isArray(arr) ? arr : [])) {
+    if (!it || typeof it !== "object") continue;
+    const s = String(it.s || "").trim();
+    const r = String(it.r || "").trim();
+    if (!/^[1-9][0-9]{0,3}$/.test(s)) continue;
+    const a = CCL_DATA[s];
+    if (a) out.push({ num: s, title: "民法典·" + (a.c || a.n), reason: r, _ccl: true });
+  }
+  DE_CCL_ASSOC_CACHE.set(key, out);
+  return out;
+}
 
 </script>
 <script>
@@ -29921,8 +30141,6 @@ async function associateCcl(query, cfg) {
   }
 
   async function run() {
-  const _codeSel = document.getElementById("codeSel");
-  if (_codeSel && _codeSel.value === "ccl") { return runCcl(); }
 
     const q = inputQ.value;
     if (!q.trim()) return;
@@ -29932,7 +30150,10 @@ async function associateCcl(query, cfg) {
       const { text, error } = fetchTexts(q);
       if (error) {
         // 先试本地快速联想（毫秒级，无需 API）
-        const local = localAssociate(q);
+        let local = localAssociate(q);
+        if (!(local && local.length) && typeof searchLocal === "function") {
+          local = searchLocal(q, "ccl");  // 中文概念 → 民法典全文检索兜底
+        }
         if (local && local.length) {
           hideAi();
           renderAi(local, "本地匹配（毫秒级）");
@@ -29953,18 +30174,21 @@ async function associateCcl(query, cfg) {
       hideAi();
       renderRefs(outEn, text);
       // 本地全量译文：命中则秒出中文，不调 API（离线可用）
-      const local = localZh(fetchTexts(q).nums);
+      const nums = fetchTexts(q).nums;
+      const local = localZh(nums);
       if (local) {
         renderZhRefs(outCn, local);
-        setStatus("本地译文 · " + q.trim() + "（已内置全量中文，无需联网）");
-        return;
+        setStatus("本地译文 · " + q.trim() + "（已内置全量中文）");
+      } else {
+        setPre(outCn, "");
+        const cfg = loadCfg();
+        setStatus("已提取，正在翻译…");
+        const cn = await translate(text, cfg);
+        renderZhRefs(outCn, cn);
+        setStatus("完成 · " + q.trim());
       }
-      setPre(outCn, "");
-      const cfg = loadCfg();
-      setStatus("已提取，正在翻译…");
-      const cn = await translate(text, cfg);
-      renderZhRefs(outCn, cn);
-      setStatus("完成 · " + q.trim());
+      // 德→中对照：查询成功后自动给出《中国民法典》对应条款（本地映射秒回，未命中走 AI）
+      renderDeCcl(nums);
     } catch (e) {
       setStatus("出错: " + e.message, true);
     } finally {
@@ -30160,12 +30384,59 @@ async function associateCcl(query, cfg) {
         r.textContent = h.reason;
         d.appendChild(r);
       }
-      d.addEventListener("click", () => loadSection(h.num));
+      d.addEventListener("click", () => {
+        if (h._ccl) { showCclFull(h.num); return; }
+        loadSection(h.num);
+      });
       box.appendChild(d);
     });
     $("aiCard").style.display = "block";
   }
   function hideAi() { $("aiCard").style.display = "none"; }
+  // ---------- 德→中条文对照（民法典对应条款） ----------
+  function renderDeCcl(nums) {
+    if (!nums || !nums.length) return;
+    const hits = [];
+    if (typeof DE_CCL_MAP !== "undefined") {
+      for (const n of nums) {
+        const lst = DE_CCL_MAP[String(n)];
+        if (lst) {
+          for (const [cn, note] of lst) {
+            const a = CCL_DATA[String(cn)];
+            const title = "民法典·" + (a ? (a.c || a.n) : cn);
+            hits.push({ num: cn, title: title, reason: note, _ccl: true });
+          }
+        }
+      }
+      if (hits.length) {
+        renderAi(hits, "本地对照（民法典对应条款）");
+        setStatus("民法典对应条款命中 " + hits.length + " 条（本地映射，秒回）。点击条目查看民法典全文");
+        return;
+      }
+    }
+    // 本地未命中 → AI 兜底
+    const cfg = loadCfg();
+    if (!cfg || !cfg.apiKey) {
+      setStatus("该条暂无本地映射，配置 API Key 后可 AI 对照民法典对应条款");
+      return;
+    }
+    setStatus("正在 AI 对照民法典对应条款...");
+    associateDeCcl(nums, cfg).then((ai) => {
+      if (ai && ai.length) renderAi(ai, "AI 对照（民法典对应条款）");
+      else setStatus("已完成查询；AI 未返回民法典对应条款（该条文可能无高度对应制度）");
+    }).catch((e) => setStatus("AI 对照失败: " + e.message, true));
+  }
+
+  function showCclFull(num) {
+    const t = getCcl(num);
+    if (!t) return;
+    hideAi();
+    inputQ.value = num;
+    outEn.innerHTML = '<p class="tip">（民法典条文：无官方英文版，请查看“中文译文”）</p>';
+    outCn.innerHTML = '<pre>' + escapeHtml(t) + "</pre>";
+    setStatus("民法典本地全文 · 第" + num + "条");
+  }
+
   function loadSection(num) {
     hideAi();
     inputQ.value = num;
@@ -30334,44 +30605,6 @@ async function associateCcl(query, cfg) {
   }
 })();
 
-
-async function runCcl() {
-  const q = inputQ.value.trim();
-  if (!q) return;
-  btnGo.disabled = true;
-  try {
-    let nums = [];
-    try { nums = parseQuery(q); } catch (_e) { nums = []; }
-    if (nums && nums.length) {
-      const parts = [];
-      for (const n of nums) { const t = getCcl(n); if (t) parts.push(t); }
-      if (parts.length) {
-        const cards = parts.map((t, i) => ({ num: nums[i], title: "民法典", reason: "本地全文", snippet: t }));
-        hideAi();
-        renderAi(cards, "民法典本地全文");
-        statusEl.textContent = "民法典本地全文 · " + parts.length + " 条";
-        return;
-      }
-    }
-    const hits = searchLocal(q, "ccl");
-    if (hits && hits.length) {
-      hideAi();
-      renderAi(hits, "本地全文检索");
-      statusEl.textContent = "民法典本地全文检索命中 " + hits.length + " 条（秒回，未调 AI）";
-      return;
-    }
-    const cfg = loadCfg();
-    if (!cfg || !cfg.apiKey) { statusEl.textContent = "本地未命中，且未配置 API Key，请在设置中填写"; return; }
-    statusEl.textContent = "本地未命中，正在 AI 联想民法典相关条文...";
-    const ai = await associateCcl(q, cfg);
-    if (ai && ai.length) { hideAi(); renderAi(ai, "AI 联想（请核对条文号）"); }
-    else { statusEl.textContent = "本地检索与 AI 联想均未找到相关条文"; }
-  } catch (e) {
-    statusEl.textContent = "出错: " + e.message;
-  } finally {
-    btnGo.disabled = false;
-  }
-}
 
 </script>
 </body>
